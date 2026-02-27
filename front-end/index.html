@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sweden Global Relations</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        body { margin: 0; display: flex; }
+        #map { height: 100vh; width: 75%; }
+        #sidebar {
+            width: 25%;
+            padding: 20px;
+            background: #f4f4f4;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="sidebar">
+        <h2>Sweden & the World</h2>    
+        <hr>
+            <div id="sidebar-content">
+                <p>Click a country to see its relationship with Sweden.</p>
+            </div>
+        <hr>
+        
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map', {
+            setView: [20, 0],
+            minZoom: 2,
+            maxZoom: 10,
+            maxBounds: [[-90, -180], [90, 180]],
+            maxBoundsViscosity: 1.0 //Hard wall. no loop
+        }).setView([20, 0], 2);
+
+        const baseMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Create NATO layer separately
+        let natoLayer = L.geoJSON(null, {
+            style: { fillColor: 'blue', fillOpacity: 0.5, color: '#555', weight: 1 }
+        });
+
+        let geoLayer;
+
+        fetch('countries.geojson')
+            .then(response => response.json())
+            .then(data => {
+                geoLayer = L.geoJson(data, {
+                    style: {
+                        color: '#555',
+                        weight: 1,
+                        fillOpacity: 0.1
+                    },
+                    onEachFeature: function(feature, layer) {
+                        layer.on('click', function() {
+                            const countryName = feature.properties.name;
+                            showRelations(countryName);
+                        });
+                        layer.on('mouseover', function() {
+                            layer.setStyle({ fillOpacity: 0.4 });
+                        });
+                        layer.on('mouseout', function() {
+                            layer.setStyle({ fillOpacity: 0.1 });
+                        });
+                    }
+                }).addTo(map);
+            });
+
+        function toggleNato(){
+            fetch(`http://localhost:5000/api/nato`)
+                .then(response => response.json())
+                .then(natoCountries => {
+                    const natoNames = natoCountries.map(c => c.country);
+                    
+                    geoLayer.eachLayer(function(layer) {
+                        const name = layer.feature.properties.name;
+                        if (natoNames.includes(name)) {
+                            natoLayer.addData(layer.feature)
+                        } 
+                    });
+                });
+        }
+
+        function showRelations(countryName) {
+            fetch(`http://localhost:5000/api/relations/${countryName}`)
+                .then(response => response.json())
+                .then(data => {
+                    const sidebar = document.getElementById('sidebar-content');
+                    if (data.error) {
+                        sidebar.innerHTML = `<h2>${countryName}</h2><p>No relationship data found yet.</p>`;
+                    } else {
+                        /*fetch(`http://localhost:5000/api/nato/${countryName}`)
+                            .then(response => response.json())
+                            .then(isNatoMember => {
+                                
+                            })*/
+
+                        sidebar.innerHTML = `
+                            <h2>${countryName}</h2>
+                            <p><b>Type:</b> ${data.type}</p>
+                            <p><b>Value:</b> ${data.value}</p>
+                            <p><b>Source:</b> ${data.source}</p>
+                            <p><b>NATO member:</b> ${data.source}</p>
+                        `;
+                    }
+                });
+        }
+
+        L.control.layers(
+            {"Base Map": baseMap},
+            {"Nato Map": natoLayer}
+        ).addTo(map)
+    </script>
+</body>
+</html>
