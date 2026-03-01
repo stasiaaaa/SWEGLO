@@ -13,6 +13,20 @@
             background: #f4f4f4;
             overflow-y: auto;
         }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #ccc;
+            border-top-color: #333;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -45,10 +59,22 @@
 
         // Create NATO layer separately
         let natoLayer = L.geoJSON(null, {
-            style: { fillColor: 'blue', fillOpacity: 0.5, color: '#555', weight: 1 }
+            style: { fillColor: 'blue', fillOpacity: 0.5, color: '#555', weight: 1 },
+            onEachFeature: function(feature, layer) {
+                layer.on('click', function() {
+                    showRelations(feature.properties.name);
+                });
+                layer.on('mouseover', function() {
+                    layer.setStyle({ fillOpacity: 0.7 });
+                });
+                layer.on('mouseout', function() {
+                    layer.setStyle({ fillOpacity: 0.5 });
+                });
+            }
         });
 
         let geoLayer;
+        let selectedLayer = null;
 
         fetch('countries.geojson')
             .then(response => response.json())
@@ -61,14 +87,25 @@
                     },
                     onEachFeature: function(feature, layer) {
                         layer.on('click', function() {
-                            const countryName = feature.properties.name;
-                            showRelations(countryName);
+                            // Reset previous selection
+                            if (selectedLayer) {
+                                geoLayer.resetStyle(selectedLayer);
+                            }
+                            // Highlight new selection
+                            layer.setStyle({ fillColor: '#e8a838', fillOpacity: 0.7 });
+                            selectedLayer = layer;
+                            
+                            showRelations(feature.properties.name);
                         });
                         layer.on('mouseover', function() {
-                            layer.setStyle({ fillOpacity: 0.4 });
+                            if (layer !== selectedLayer) {
+                                layer.setStyle({ fillOpacity: 0.4 });
+                            }
                         });
                         layer.on('mouseout', function() {
-                            layer.setStyle({ fillOpacity: 0.1 });
+                            if (layer !== selectedLayer) {
+                                layer.setStyle({ fillOpacity: 0.1 });
+                            }
                         });
                     }
                 }).addTo(map);
@@ -90,7 +127,10 @@
 
         function showRelations(countryName) {
             const sidebar = document.getElementById('sidebar-content');
-            sidebar.innerHTML = `<p>Loading ${countryName}...</p>`; 
+            sidebar.innerHTML = `
+                <p><b>${countryName}</b></p>
+                <div class="spinner"></div>
+            `; 
 
             const countryCode = COUNTRY_CODES[countryName];
 
