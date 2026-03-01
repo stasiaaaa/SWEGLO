@@ -28,6 +28,8 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="country_codes.js"></script>
+
     <script>
         const map = L.map('map', {
             setView: [20, 0],
@@ -70,46 +72,50 @@
                         });
                     }
                 }).addTo(map);
-            });
 
-        function toggleNato(){
-            fetch(`http://localhost:5000/api/nato`)
+                fetch('http://localhost:5000/api/nato')
                 .then(response => response.json())
                 .then(natoCountries => {
                     const natoNames = natoCountries.map(c => c.country);
-                    
                     geoLayer.eachLayer(function(layer) {
-                        const name = layer.feature.properties.name;
-                        if (natoNames.includes(name)) {
-                            natoLayer.addData(layer.feature)
-                        } 
+                        if (natoNames.includes(layer.feature.properties.name)) {
+                            natoLayer.addData(layer.feature);
+                        }
                     });
                 });
-        }
+
+            });
+
+        
 
         function showRelations(countryName) {
-            fetch(`http://localhost:5000/api/relations/${countryName}`)
-                .then(response => response.json())
-                .then(data => {
-                    const sidebar = document.getElementById('sidebar-content');
-                    if (data.error) {
-                        sidebar.innerHTML = `<h2>${countryName}</h2><p>No relationship data found yet.</p>`;
-                    } else {
-                        /*fetch(`http://localhost:5000/api/nato/${countryName}`)
-                            .then(response => response.json())
-                            .then(isNatoMember => {
-                                
-                            })*/
+            const sidebar = document.getElementById('sidebar-content');
+            sidebar.innerHTML = `<p>Loading ${countryName}...</p>`; 
 
-                        sidebar.innerHTML = `
-                            <h2>${countryName}</h2>
-                            <p><b>Type:</b> ${data.type}</p>
-                            <p><b>Value:</b> ${data.value}</p>
-                            <p><b>Source:</b> ${data.source}</p>
-                            <p><b>NATO member:</b> ${data.source}</p>
-                        `;
-                    }
-                });
+            const countryCode = COUNTRY_CODES[countryName];
+
+            // Guard for countries not in country_codes.js
+            const militaryPromise = countryCode 
+                    ? fetch(`http://localhost:5000/api/military/${countryCode}`).then(r => r.json())
+                    : Promise.resolve({ error: 'No code found' });
+
+            Promise.all([
+                fetch(`http://localhost:5000/api/nato/${countryName}`).then(r => r.json()),
+                militaryPromise
+            ]).then(([ nato, military]) => {
+    
+                const natoStatus = nato.nato_member ? '✅ Yes' : '❌ No';
+                const militaryValue = military.value 
+                    ? `${military.value.toFixed(2)}% of GDP (${military.year})` 
+                    : 'No data';
+                
+                
+                sidebar.innerHTML = `
+                    <h2>${countryName}</h2>
+                    <p><b>NATO member:</b> ${natoStatus}</p>
+                    <p><b>Military spending:</b> ${militaryValue}</p>
+                `;
+            });
         }
 
         L.control.layers(
